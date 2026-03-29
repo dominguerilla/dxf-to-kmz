@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DXF to KMZ Converter</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f6f9;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 540px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+
+    .subtitle {
+      color: #6b7280;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .drop-label {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .drop-hint {
+      color: #6b7280;
+      font-size: 0.82rem;
+      margin-top: 0.25rem;
+    }
+
+    .file-list {
+      margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+    }
+
+    .file-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .file-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0 0.25rem;
+      flex-shrink: 0;
+    }
+
+    .file-remove:hover { color: #ef4444; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: #2563eb; }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      display: none;
+    }
+
+    .status.info    { background: #eff6ff; color: #1d4ed8; display: block; }
+    .status.success { background: #f0fdf4; color: #15803d; display: block; }
+    .status.error   { background: #fef2f2; color: #b91c1c; display: block; }
+
+    .download-link {
+      display: inline-block;
+      margin-top: 0.5rem;
+      color: #15803d;
+      font-weight: 600;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>DXF to KMZ Converter</h1>
+    <p class="subtitle">Upload one or more DXF files to convert them to KMZ.</p>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".dxf" multiple />
+      <div class="drop-icon">📂</div>
+      <div class="drop-label">Drop DXF files here or click to browse</div>
+      <div class="drop-hint">Accepts .dxf files &mdash; multiple files supported</div>
+    </div>
+
+    <div class="file-list" id="fileList"></div>
+
+    <button class="btn btn-primary" id="convertBtn" disabled>Convert to KMZ</button>
+
+    <div class="status" id="status"></div>
+  </div>
+
+  <script>
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const fileList   = document.getElementById('fileList');
+    const convertBtn = document.getElementById('convertBtn');
+    const status     = document.getElementById('status');
+
+    let selectedFiles = [];
+
+    function renderFileList() {
+      fileList.innerHTML = '';
+      selectedFiles.forEach((file, i) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = `
+          <span title="${file.name}">${file.name}</span>
+          <button class="file-remove" data-index="${i}" title="Remove">✕</button>
+        `;
+        fileList.appendChild(item);
+      });
+      convertBtn.disabled = selectedFiles.length === 0;
+    }
+
+    function addFiles(newFiles) {
+      for (const f of newFiles) {
+        if (f.name.toLowerCase().endsWith('.dxf') && !selectedFiles.find(e => e.name === f.name)) {
+          selectedFiles.push(f);
+        }
+      }
+      renderFileList();
+    }
+
+    fileInput.addEventListener('change', () => {
+      addFiles(Array.from(fileInput.files));
+      fileInput.value = '';
+    });
+
+    fileList.addEventListener('click', e => {
+      const btn = e.target.closest('.file-remove');
+      if (!btn) return;
+      selectedFiles.splice(Number(btn.dataset.index), 1);
+      renderFileList();
+    });
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      addFiles(Array.from(e.dataTransfer.files));
+    });
+
+    function setStatus(type, html) {
+      status.className = `status ${type}`;
+      status.innerHTML = html;
+    }
+
+    convertBtn.addEventListener('click', async () => {
+      if (selectedFiles.length === 0) return;
+
+      convertBtn.disabled = true;
+      setStatus('info', 'Converting&hellip;');
+
+      const formData = new FormData();
+      selectedFiles.forEach(f => formData.append('files', f));
+
+      try {
+        const res = await fetch('/convert', { method: 'POST', body: formData });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({ detail: 'Unknown error' }));
+          setStatus('error', `Error: ${data.detail}`);
+          return;
+        }
+
+        const blob = await res.blob();
+        const disposition = res.headers.get('content-disposition') || '';
+        const match = disposition.match(/filename="?([^";\n]+)"?/);
+        const filename = match ? match[1] : (blob.type.includes('zip') ? 'converted_kmz_files.zip' : 'output.kmz');
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.className = 'download-link';
+        a.textContent = `Download ${filename}`;
+
+        setStatus('success', `Conversion complete! `);
+        status.appendChild(a);
+        a.click();
+
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (err) {
+        setStatus('error', `Network error: ${err.message}`);
+      } finally {
+        convertBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

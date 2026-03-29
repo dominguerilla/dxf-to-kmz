@@ -2,6 +2,8 @@
 
 A web application that converts Drawing Exchange Format (`.dxf`) files into Keyhole Markup Language (`.kml`/`.kmz`) files. Upload one or more DXF files through the browser and download the converted KMZ files.
 
+This project was created with Claude.
+
 ## Requirements
 
 - Python 3.9+
